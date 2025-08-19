@@ -1,9 +1,23 @@
 import { kv } from '@vercel/kv';
 
-// All helper functions (tmdb, tokenize, cosine, etc.) remain the same
+// ===============================================
+// HELPER FUNCTIONS (TMDB API & Text Processing)
+// ===============================================
+
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = "https://api.themoviedb.org/3";
-async function tmdb(path, params = {}) { /* ... a lot of code ... */ } // Placeholder for brevity
+
+async function tmdb(path, params = {}) {
+  const url = new URL(TMDB_BASE + path);
+  url.searchParams.set('api_key', TMDB_API_KEY);
+  url.searchParams.set('language', 'en-US');
+  for (const key in params) {
+    url.searchParams.set(key, params[key]);
+  }
+  const res = await fetch(url);
+  return res.json();
+}
+
 const EN_STOP = new Set('a,an,and,are,as,at,be,by,for,from,has,he,in,is,it,its,of,on,that,the,they,this,to,was,were,with,will,his,her,have,not,or,if,into,over,after,before,also,about,them,than,then,when,while,who,whom,which,what,why,how,their,there,been,do,does,did,doing,up,down,out,off,again,further,more,most,other,own,same,so,too,very,can,just,should,now'.split(','));
 function tokenize(txt) { if (!txt) return []; const clean = txt.toLowerCase().replace(/[^\p{L}\s]/gu, ' '); return clean.split(/\s+/).filter(t => t.length > 2 && !EN_STOP.has(t)); }
 function tf(tokens) { const f = new Map(); tokens.forEach(t => f.set(t, (f.get(t) || 0) + 1)); return f; }
@@ -22,8 +36,6 @@ async function fetchDetailsWithKeywords(item) {
     else if (keywordsResponse.results) keywords = keywordsResponse.results.map(k => k.name);
     return { ...details, keywords };
 }
-// Keep all the helper functions from the previous version, paste them here.
-// For brevity, I am only showing the main handler function that has changed.
 
 // ===============================================
 // THE NEW, FASTER CRON JOB HANDLER
@@ -53,7 +65,7 @@ export default async function handler(request, response) {
     const movieToProcess = popularMovies[position.index];
     movieToProcess.media_type = 'movie';
 
-    // --- 4. Fetch candidates to compare against (same as before) ---
+    // --- 4. Fetch candidates to compare against ---
     const candidateMovies = await tmdb('/discover/movie', { sort_by: 'vote_average.desc', 'vote_count.gte': 500, page: 1 });
     const candidates = candidateMovies.results;
     
