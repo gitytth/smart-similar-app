@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+  
+  <title>Smart Similar Movies & Series</title>
+</head>
+<body>
+  
+  <header>
+    <div class="container">
+      <h1>🔎 Smart Similar Movies & Series</h1>
+      <div class="search-wrap" id="searchWrap">
+        <input id="query" type="text" placeholder="Search for a movie or series…" autocomplete="off" />
+        <div id="suggestions" class="suggestions" role="listbox" aria-label="Suggestions"></div>
+      </div>
+      <div class="hint">Find titles with similar plots, genres, and keywords.</div>
+    </div>
+  </header>
+
+  <main class="results">
+    <section id="similarSection" style="display:none">
+      <div class="toolbar">
+        <div class="pill" id="chosenTitle"></div>
+        <div class="switch">
+          <label><input type="checkbox" id="includeTmdb" checked /> Include TMDB recommendations</label>
+        </div>
+      </div>
+      <div class="loader" id="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span>Building smart similarity list…</span></div>
+      <div id="similarGrid" class="grid"></div>
+      <div id="emptyMsg" class="empty" style="display:none">No similar titles found.</div>
+    </section>
+  </main>
+
+  <div id="trailerModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn trailer-close">&times;</span>
+      <iframe id="trailerFrame" width="100%" height="100%" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+  </div>
+  
+  <div id="storyModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn story-close">&times;</span>
+        <div class="story-modal-body">
+            <h2 id="storyTitle"></h2>
+            <p id="storyOverview"></p>
+        </div>
+    </div>
+  </div>
+  
+  <script src="script.js" defer></script>
+</body>
+</html>
