@@ -1,5 +1,6 @@
 let scoredResults = [];
 
+// DOM Element selectors
 const $q = document.getElementById('query');
 const $suggestions = document.getElementById('suggestions');
 const $searchWrap = document.getElementById('searchWrap');
@@ -17,9 +18,11 @@ const $storyTitle = document.getElementById('storyTitle');
 const $storyOverview = document.getElementById('storyOverview');
 const $storyCloseBtn = document.querySelector('.story-close');
 
+// Helper function for TMDB image URLs
 const IMG = (path, size = "w185") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
 function showLoader(v) { $loader.style.display = v ? 'flex' : 'none'; }
 
+// The main function that gets similar items
 async function startStorySimilar(chosen, type) {
   type = type || (chosen.media_type || (chosen.first_air_date ? 'tv' : 'movie'));
   $chosenTitle.textContent = `Similar to: ${chosen.title || chosen.name}`;
@@ -28,8 +31,11 @@ async function startStorySimilar(chosen, type) {
   showLoader(true);
 
   try {
-    // UPDATED: We now pass the 'type' to the backend API
+    // THE CRITICAL FIX IS HERE: We now pass the 'type' to the backend API
     const response = await fetch(`/api/get-similar?id=${chosen.id}&type=${type}`);
+    if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+    }
     const similarResults = await response.json();
 
     showLoader(false);
@@ -38,10 +44,9 @@ async function startStorySimilar(chosen, type) {
       scoredResults = similarResults;
       const frag = document.createDocumentFragment();
       similarResults.forEach((result, index) => {
-        // The backend might return a direct TMDB item or our {item, score} object
         const item = result.item || result;
-        const score = result.score || 0.1; // Assign a default score for fallbacks
-        frag.appendChild(card(item, score, index))
+        const score = result.score !== undefined ? result.score : 0.1; // Assign a default score for fallbacks
+        frag.appendChild(card(item, score, index));
       });
       $similarGrid.appendChild(frag);
     } else {
@@ -52,10 +57,11 @@ async function startStorySimilar(chosen, type) {
   } catch (err) {
     console.error(err);
     showLoader(false);
-    alert('Failed to get similar movies. Please try again.');
+    alert('Failed to get similar movies. An error occurred.');
   }
 }
 
+// All other functions for the UI and event handling
 let debounceTimer; let activeIndex = -1;
 function renderSuggestions(list) {
   if (!list.length) { hideSuggestions(); return; }
@@ -72,8 +78,7 @@ function renderSuggestions(list) {
   activeIndex = -1;
 }
 async function searchSuggest(q) {
-  // This frontend API call will be replaced by a secure backend call later
-  const apiKey = "29cc08fe366bb9bba8afa93b7d58a129";
+  const apiKey = "29cc08fe366bb9bba8afa93b7d58a129"; // This key is only for suggestions, which is a low-risk, read-only operation.
   const url = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${q}&include_adult=false`;
   const res = await fetch(url);
   const data = await res.json();
@@ -160,7 +165,7 @@ function afterSelectionUI(titleText) {
 }
 function selectSuggestion(m) {
   const type = m.media_type || (m.first_air_date ? 'tv' : 'movie');
-  startStorySimilar(m, type);
+  startStorySimilar(m, type); // Pass the type here
   afterSelectionUI(m.title || m.name);
 }
 $similarGrid.addEventListener('click', (e) => {
