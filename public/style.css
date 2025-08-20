@@ -283,39 +283,3 @@ input[type=text]:focus {
   .close-btn { right: 10px; top: 10px; color: black; background: white; border-radius: 50%; width: 30px; height: 30px; font-size: 20px; display: flex; align-items: center; justify-content: center; line-height: 1; }
   .modal-content { margin: 10% auto; }
 }
-
-/* Styles for Language Switcher and RTL support */
-.lang-switcher-wrap {
-  text-align: right;
-  margin-bottom: 16px;
-}
-
-#languageSwitcher {
-  background-color: var(--bg-medium);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px;
-  cursor: pointer;
-}
-
-/* RTL (Right-to-Left) Styles */
-html[dir="rtl"] {
-  direction: rtl;
-}
-
-html[dir="rtl"] .s-item {
-  text-align: right;
-}
-
-html[dir="rtl"] .s-trailer-btn {
-  right: auto;
-  left: 12px;
-}
-
-html[dir="rtl"] .switch label {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  gap: 8px;
-}
