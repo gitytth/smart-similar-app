@@ -1,7 +1,6 @@
 import { kv } from '@vercel/kv';
 
-// We need to copy all the helper and calculation functions here
-// so this endpoint can perform live calculations when needed.
+// We copy all helper functions here so this endpoint can do live calculations.
 // ===============================================
 // HELPER FUNCTIONS (TMDB API & Text Processing)
 // ===============================================
@@ -17,6 +16,7 @@ async function tmdb(path, params = {}) {
     url.searchParams.set(key, params[key]);
   }
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`TMDB API error: ${res.statusText}`);
   return res.json();
 }
 
@@ -36,53 +36,54 @@ async function fetchDetailsWithKeywords(item, type) {
     let keywords = [];
     if (keywordsResponse.keywords) keywords = keywordsResponse.keywords.map(k => k.name);
     else if (keywordsResponse.results) keywords = keywordsResponse.results.map(k => k.name);
-    return { ...details, keywords };
+    return { ...details, keywords, media_type: type }; // Ensure media_type is present
 }
 
 // ===============================================
-// THE NEW "ON-DEMAND" HANDLER
+// THE FINAL "ON-DEMAND" HANDLER
 // ===============================================
 export default async function handler(request, response) {
   try {
-    const movieId = request.query.id;
-    const movieType = request.query.type || 'movie';
-    if (!movieId) {
-      return response.status(400).json({ message: 'Movie ID is required' });
+    const { id, type } = request.query;
+    if (!id) {
+      return response.status(400).json({ message: 'ID is required' });
     }
 
-    const dbKey = `movie:${movieId}`;
+    const dbKey = `${type}:${id}`;
 
-    // 1. First, check the database (KV store)
+    // 1. First, check the database
     console.log(`Checking database for key: ${dbKey}`);
-    let similarMovies = await kv.get(dbKey);
+    const cachedData = await kv.get(dbKey);
 
     // 2. If data is found, return it instantly! (Fast path)
-    if (similarMovies) {
-      console.log(`Cache hit for movie ${movieId}. Returning stored data.`);
-      return response.status(200).json(similarMovies);
+    if (cachedData) {
+      console.log(`Cache hit for ${dbKey}. Returning stored data.`);
+      return response.status(200).json(cachedData);
     }
 
     // 3. If data is NOT found, perform a live calculation (Smart path)
-    console.log(`Cache miss for movie ${movieId}. Performing live calculation...`);
+    console.log(`Cache miss for ${dbKey}. Performing live calculation...`);
     
-    // Fetch details for the requested movie
-    const details = await fetchDetailsWithKeywords({ id: movieId, media_type: movieType });
+    // This function can take up to 10-15 seconds on the free tier
+    const details = await fetchDetailsWithKeywords({ id, media_type: type }, type);
     
-    // Build the rich text document for the target movie
     const targetGenres = details.genres ? details.genres.map(g => g.name) : [];
     const targetRichText = [details.overview, ...Array(5).fill(targetGenres.join(' ')), ...Array(10).fill(details.keywords.join(' '))].join(' ');
     const targetTF = tf(tokenize(targetRichText));
 
-    // Fetch candidates to compare against
-    const candidateMovies = await tmdb('/discover/movie', { sort_by: 'vote_average.desc', 'vote_count.gte': 500, page: 1 });
-    const candidates = candidateMovies.results;
+    // Fetch candidates based on target genres for better relevance
+    const genreIds = (details.genres || []).map(g => g.id).join(',');
+    const [candidateMovies, candidateTv] = await Promise.all([
+        tmdb('/discover/movie', { sort_by: 'popularity.desc', 'vote_count.gte': 100, with_genres: genreIds, page: 1 }),
+        tmdb('/discover/tv', { sort_by: 'popularity.desc', 'vote_count.gte': 100, with_genres: genreIds, page: 1 })
+    ]);
+    const candidates = [...candidateMovies.results, ...candidateTv.results];
     
-    const allGenres = await tmdb('/genre/movie/list');
-    const genreMap = new Map(allGenres.genres.map(g => [g.id, g.name]));
+    const [movieGenres, tvGenres] = await Promise.all([tmdb('/genre/movie/list'), tmdb('/genre/tv/list')]);
+    const genreMap = new Map([...movieGenres.genres, ...tvGenres.genres].map(g => [g.id, g.name]));
 
-    // Perform the similarity calculation
     const corpTFs = candidates.map(c => {
-        const candidateGenres = (c.genre_ids || []).map(id => genreMap.get(id) || '').filter(Boolean);
+        const candidateGenres = (c.genre_ids || []).map(genreId => genreMap.get(genreId) || '').filter(Boolean);
         const candidateRichText = [c.overview, ...Array(5).fill(candidateGenres.join(' '))].join(' ');
         return tf(tokenize(candidateRichText));
     });
@@ -94,20 +95,21 @@ export default async function handler(request, response) {
     let scored = candidates.map((c, i) => {
         const v = vecFrom(allTFs[i+1], idf);
         const score = cosine(tgtVec.v, tgtVec.norm, v.v, v.norm);
+        c.media_type = c.media_type || (c.first_air_date ? 'tv' : 'movie');
         return { item: c, score };
-    }).filter(x => x.score > 0.05 && x.item.id !== details.id);
+    }).filter(x => x.score > 0.05 && x.item.id != id);
     
     scored.sort((a, b) => b.score - a.score);
-    const top20Similar = scored.slice(0, 20);
+    const topResults = scored.slice(0, 50);
 
-    // 4. Save the new result to the database for next time
-    // We use 'px' for expiration time in milliseconds. Set to 30 days.
-    // 30 days * 24 hours * 60 minutes * 60 seconds * 1000 milliseconds
-    console.log(`Saving new results for movie ${movieId} to database.`);
-    await kv.set(dbKey, JSON.stringify(top20Similar), { px: 30 * 24 * 60 * 60 * 1000 });
+    // 4. Save the new result to the database for next time (expires in 30 days)
+    if (topResults.length > 0) {
+        console.log(`Saving new results for ${dbKey} to database.`);
+        await kv.set(dbKey, topResults, { ex: 60 * 60 * 24 * 30 }); // Expires in 30 days
+    }
 
-    // 5. Return the newly calculated data to the user
-    return response.status(200).json(top20Similar);
+    // 5. Return the newly calculated data
+    return response.status(200).json(topResults);
 
   } catch (error) {
     console.error(error);
