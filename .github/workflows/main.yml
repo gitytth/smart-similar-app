@@ -1,19 +1,16 @@
-# اسم ملف العمل
 name: Vercel Cron Job Runner
 
-# متى يتم تشغيله
 on:
   schedule:
-    # يعمل في بداية كل ساعة، كل يوم
-    - cron: '0 * * * *'
-  # هذا يسمح لك بتشغيله يدويًا أيضًا من قسم Actions
+    # UPDATED: Runs every 15 minutes
+    - cron: '*/15 * * * *'
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# المهام التي سيقوم بها
 jobs:
   run-cron:
     runs-on: ubuntu-latest
     steps:
       - name: Call Vercel Cron Job URL
-        # نستخدم أمر بسيط (curl) لزيارة الرابط
+        # We use curl to make a simple web request
         run: curl -s "https://smart-similar-app.vercel.app/api/cron"
