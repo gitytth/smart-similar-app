@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 
-// All helper functions are still needed for the smart calculation
+// All helper functions are still needed
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = "https://api.themoviedb.org/3";
 async function tmdb(path, params = {}) { const url = new URL(TMDB_BASE + path); url.searchParams.set('api_key', TMDB_API_KEY); url.searchParams.set('language', 'en-US'); for (const key in params) { url.searchParams.set(key, params[key]); } const res = await fetch(url); if (!res.ok) throw new Error(`TMDB API error: ${res.statusText}`); return res.json(); }
@@ -13,7 +13,7 @@ function cosine(v1, n1, v2, n2) { if (!n1 || !n2) return 0; let dot = 0; v1.forE
 async function fetchDetailsWithKeywords(item, type) { type = type || item.media_type || 'movie'; const path = type === 'movie' ? `/movie/${item.id}` : `/tv/${item.id}`; const [details, keywordsResponse] = await Promise.all([tmdb(path), tmdb(`${path}/keywords`)]); let keywords = []; if (keywordsResponse.keywords) keywords = keywordsResponse.keywords.map(k => k.name); else if (keywordsResponse.results) keywords = keywordsResponse.results.map(k => k.name); return { ...details, keywords, media_type: type }; }
 
 // ===============================================
-// THE FINAL, OPTIMIZED, AND ROBUST HANDLER
+// THE FINAL, ULTIMATE HANDLER
 // ===============================================
 export default async function handler(request, response) {
   const { id, type } = request.query;
@@ -24,24 +24,23 @@ export default async function handler(request, response) {
 
   try {
     // 1. Check the database first (fast path)
-    console.log(`Checking database for key: ${dbKey}`);
     const cachedData = await kv.get(dbKey);
     if (cachedData) {
-      console.log(`Cache hit for ${dbKey}.`);
       return response.status(200).json(cachedData);
     }
 
-    // 2. If not in DB, try our smart, on-demand calculation (slower path)
-    console.log(`Cache miss for ${dbKey}. Performing optimized live calculation...`);
+    // 2. If not in DB, perform the ULTIMATE on-demand calculation
+    console.log(`Cache miss for ${dbKey}. Performing final optimized calculation...`);
     
-    // OPTIMIZATION: Use TMDB's "similar" list as a high-quality candidate pool.
-    // This is much faster and more relevant than a broad discovery search.
+    // THE BIG OPTIMIZATION: Use TMDB's "similar" list as a high-quality candidate pool.
+    // This is much faster and more relevant.
     const similarResponse = await tmdb(`/${type}/${id}/similar`);
-    const candidates = (similarResponse.results || []).filter(c => c.overview);
+    const candidates = (similarResponse.results || []).filter(c => c.overview && c.poster_path);
 
     if (candidates.length < 5) {
-        // If TMDB has few similar items, just return them as a fallback immediately.
-        console.log(`Not enough candidates for ${dbKey}. Returning TMDB's list as fallback.`);
+        // If TMDB itself has few similar items, just return them as a fallback.
+        console.log(`Not enough candidates for ${dbKey}. Returning TMDB's list directly.`);
+        await kv.set(dbKey, candidates, { ex: 60 * 60 * 24 * 7 }); // Cache for 7 days
         return response.status(200).json(candidates);
     }
 
@@ -50,13 +49,10 @@ export default async function handler(request, response) {
     const targetGenres = details.genres ? details.genres.map(g => g.name) : [];
     const targetRichText = [details.overview, ...Array(5).fill(targetGenres.join(' ')), ...Array(10).fill(details.keywords.join(' '))].join(' ');
     const targetTF = tf(tokenize(targetRichText));
-
-    const allGenres = await Promise.all([tmdb('/genre/movie/list'), tmdb('/genre/tv/list')]);
-    const genreMap = new Map([...allGenres[0].genres, ...allGenres[1].genres].map(g => [g.id, g.name]));
     
+    // We don't need the genreMap anymore as candidates are already relevant
     const corpTFs = candidates.map(c => {
-        const candidateGenres = (c.genre_ids || []).map(genreId => genreMap.get(genreId) || '').filter(Boolean);
-        const candidateRichText = [c.overview, ...Array(5).fill(candidateGenres.join(' '))].join(' ');
+        const candidateRichText = c.overview; // Simpler text doc for candidates
         return tf(tokenize(candidateRichText));
     });
 
@@ -69,28 +65,26 @@ export default async function handler(request, response) {
         const score = cosine(tgtVec.v, tgtVec.norm, v.v, v.norm);
         c.media_type = c.media_type || (c.first_air_date ? 'tv' : 'movie');
         return { item: c, score };
-    }).filter(x => x.score > 0.05);
+    }).filter(x => x.score > 0.01); // Lower threshold is fine with better candidates
     
     scored.sort((a, b) => b.score - a.score);
     const topResults = scored.slice(0, 50);
 
-    // Save the new result to the database for next time
+    // Save the new result to the database
     if (topResults.length > 0) {
-        console.log(`Saving new results for ${dbKey} to database.`);
         await kv.set(dbKey, topResults, { ex: 60 * 60 * 24 * 30 }); // Expires in 30 days
     }
     
     return response.status(200).json(topResults);
 
   } catch (error) {
-    // 3. FALLBACK PLAN: If our smart calculation fails for any reason (e.g., timeout)
+    // FALLBACK PLAN: If our smart calculation fails for any reason
     console.error(`Smart calculation failed for ${dbKey}: ${error.message}. Using fallback.`);
     try {
         const fallbackResponse = await tmdb(`/${type}/${id}/recommendations`);
         const fallbackResults = fallbackResponse.results || [];
         return response.status(200).json(fallbackResults);
     } catch (fallbackError) {
-        console.error(`Fallback also failed for ${dbKey}: ${fallbackError.message}`);
         return response.status(500).json({ message: 'Both calculation and fallback failed.' });
     }
   }
