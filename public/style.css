@@ -88,12 +88,11 @@ input[type=text]:focus {
 .s-title { font-weight: 600; }
 .s-sub { font-size: .85rem; color: var(--text-secondary); }
 
-/* Wrapper for suggestion image to position the play icon */
 .s-img-wrap {
   position: relative;
   width: 44px;
   height: 66px;
-  flex-shrink: 0; /* Prevents the image from shrinking */
+  flex-shrink: 0;
 }
 .s-img-wrap img {
   width: 100%;
@@ -101,7 +100,6 @@ input[type=text]:focus {
   object-fit: cover;
   border-radius: 6px;
 }
-/* Play icon that appears on the suggestion image */
 .s-play-icon {
   position: absolute;
   top: 50%;
@@ -117,7 +115,7 @@ input[type=text]:focus {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  padding-left: 2px; /* Center the triangle icon better */
+  padding-left: 2px;
   cursor: pointer;
   opacity: 0;
   visibility: hidden;
@@ -284,4 +282,40 @@ input[type=text]:focus {
   .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
   .close-btn { right: 10px; top: 10px; color: black; background: white; border-radius: 50%; width: 30px; height: 30px; font-size: 20px; display: flex; align-items: center; justify-content: center; line-height: 1; }
   .modal-content { margin: 10% auto; }
+}
+
+/* Styles for Language Switcher and RTL support */
+.lang-switcher-wrap {
+  text-align: right;
+  margin-bottom: 16px;
+}
+
+#languageSwitcher {
+  background-color: var(--bg-medium);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+/* RTL (Right-to-Left) Styles */
+html[dir="rtl"] {
+  direction: rtl;
+}
+
+html[dir="rtl"] .s-item {
+  text-align: right;
+}
+
+html[dir="rtl"] .s-trailer-btn {
+  right: auto;
+  left: 12px;
+}
+
+html[dir="rtl"] .switch label {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 8px;
 }

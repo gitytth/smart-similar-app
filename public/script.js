@@ -1,6 +1,6 @@
 let scoredResults = [];
+let currentLang = 'en'; // Default language
 
-// DOM Element selectors
 const $q = document.getElementById('query');
 const $suggestions = document.getElementById('suggestions');
 const $searchWrap = document.getElementById('searchWrap');
@@ -17,26 +17,66 @@ const $storyModal = document.getElementById('storyModal');
 const $storyTitle = document.getElementById('storyTitle');
 const $storyOverview = document.getElementById('storyOverview');
 const $storyCloseBtn = document.querySelector('.story-close');
+const $languageSwitcher = document.getElementById('languageSwitcher');
 
-// UPDATED: The default size is now w500 for higher quality
 const IMG = (path, size = "w500") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
 function showLoader(v) { $loader.style.display = v ? 'flex' : 'none'; }
 
-// The main function that gets similar items
+// ===============================================
+// NEW: Internationalization (i18n) Functions
+// ===============================================
+
+function translatePage() {
+  document.querySelectorAll('[data-i18n-key]').forEach(el => {
+    const key = el.getAttribute('data-i18n-key');
+    el.textContent = translations[currentLang][key];
+  });
+  document.querySelectorAll('[data-i18n-key-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-key-placeholder');
+    el.placeholder = translations[currentLang][key];
+  });
+}
+
+function setLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('selectedLanguage', lang); // Save user's choice
+  
+  // Handle RTL languages
+  if (lang === 'ar' || lang === 'ur') {
+    document.documentElement.setAttribute('dir', 'rtl');
+  } else {
+    document.documentElement.setAttribute('dir', 'ltr');
+  }
+  
+  $languageSwitcher.value = lang;
+  translatePage();
+}
+
+$languageSwitcher.addEventListener('change', (e) => {
+  setLanguage(e.target.value);
+});
+
+// On page load, check for a saved language or default to English
+document.addEventListener('DOMContentLoaded', () => {
+  const savedLang = localStorage.getItem('selectedLanguage') || 'en';
+  setLanguage(savedLang);
+});
+
+// ===============================================
+// Main Application Logic (Updated with translations)
+// ===============================================
+
 async function startStorySimilar(chosen, type) {
   type = type || (chosen.media_type || (chosen.first_air_date ? 'tv' : 'movie'));
-  $chosenTitle.textContent = `Similar to: ${chosen.title || chosen.name}`;
+  $chosenTitle.textContent = `${translations[currentLang].similar_to} ${chosen.title || chosen.name}`;
   $similarGrid.innerHTML = '';
   $emptyMsg.style.display = 'none';
   showLoader(true);
 
   try {
     const response = await fetch(`/api/get-similar?id=${chosen.id}&type=${type}`);
-    if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
     const similarResults = await response.json();
-
     showLoader(false);
 
     if (similarResults && similarResults.length > 0) {
@@ -49,18 +89,16 @@ async function startStorySimilar(chosen, type) {
       });
       $similarGrid.appendChild(frag);
     } else {
-      $emptyMsg.textContent = "Similarity data for this title is not yet available. Our daily script will process it soon.";
+      $emptyMsg.textContent = translations[currentLang].no_results_on_demand;
       $emptyMsg.style.display = 'block';
     }
-
   } catch (err) {
     console.error(err);
     showLoader(false);
-    alert('Failed to get similar movies. An error occurred.');
+    alert(translations[currentLang].fetch_error);
   }
 }
 
-// All other functions for the UI and event handling
 let debounceTimer; let activeIndex = -1;
 function renderSuggestions(list) {
   if (!list.length) { hideSuggestions(); return; }
@@ -69,8 +107,7 @@ function renderSuggestions(list) {
     const type = m.media_type || (m.first_air_date ? 'tv' : 'movie');
     const div = document.createElement('div');
     div.className = 's-item';
-    // UPDATED: We request a smaller, faster 'w185' image for suggestions
-    div.innerHTML = `<div class="s-img-wrap"><img src="${IMG(m.poster_path, 'w185')}" alt="poster" onerror="this.style.display='none'"/><div class="s-play-icon" data-id="${m.id}" data-type="${type}">&#9658;</div></div><div><div class="s-title">${m.title || m.name}</div><div class="s-sub">${type.toUpperCase()} · ${(m.release_date || m.first_air_date || '').slice(0, 4)}</div></div><button class="s-trailer-btn" data-id="${m.id}" data-type="${type}">Trailer</button>`;
+    div.innerHTML = `<div class="s-img-wrap"><img src="${IMG(m.poster_path, 'w185')}" alt="poster" onerror="this.style.display='none'"/><div class="s-play-icon" data-id="${m.id}" data-type="${type}">&#9658;</div></div><div><div class="s-title">${m.title || m.name}</div><div class="s-sub">${type.toUpperCase()} · ${(m.release_date || m.first_air_date || '').slice(0, 4)}</div></div><button class="s-trailer-btn" data-id="${m.id}" data-type="${type}">${translations[currentLang].trailer}</button>`;
     div.addEventListener('click', () => selectSuggestion(m));
     $suggestions.appendChild(div);
   });
@@ -96,12 +133,11 @@ function card(m, score, index) {
   const year = (m.release_date || m.first_air_date || '').slice(0, 4);
   const type = m.media_type || (m.first_air_date ? 'tv' : 'movie');
   let badgeColor, badgeText;
-  if (score > 0.4) { badgeColor = '#1f6feb'; badgeText = 'Excellent Match'; }
-  else if (score > 0.25) { badgeColor = '#238636'; badgeText = 'Good Match'; }
-  else { badgeColor = '#8B949E'; badgeText = 'Fair Match'; }
+  if (score > 0.4) { badgeColor = '#1f6feb'; badgeText = translations[currentLang].match_excellent; }
+  else if (score > 0.25) { badgeColor = '#238636'; badgeText = translations[currentLang].match_good; }
+  else { badgeColor = '#8B949E'; badgeText = translations[currentLang].match_fair; }
   div.className = 'card';
-  // UPDATED: We request a high-quality 'w500' image for the results grid
-  div.innerHTML = `<div class="poster-wrap"><img class="poster" src="${IMG(m.poster_path, 'w500')}" alt="Poster" loading="lazy" onerror="this.style.display='none'"><div class="trailer-btn" data-id="${m.id}" data-type="${type}" title="Watch Trailer">&#9658;</div></div><div class="meta"><div class="title">${m.title || m.name}</div><div class="sub">${type.toUpperCase()} · ${year} · ⭐ ${m.vote_average?.toFixed(1) || '—'}</div><div class="sub"><span class="match-badge" style="background-color:${badgeColor}">${badgeText}</span>(${(score * 100).toFixed(0)}%)</div><button class="story-btn" data-index="${index}">Read Story</button></div>`;
+  div.innerHTML = `<div class="poster-wrap"><img class="poster" src="${IMG(m.poster_path, 'w500')}" alt="Poster" loading="lazy" onerror="this.style.display='none'"><div class="trailer-btn" data-id="${m.id}" data-type="${type}" title="Watch Trailer">&#9658;</div></div><div class="meta"><div class="title">${m.title || m.name}</div><div class="sub">${type.toUpperCase()} · ${year} · ⭐ ${m.vote_average?.toFixed(1) || '—'}</div><div class="sub"><span class="match-badge" style="background-color:${badgeColor}">${badgeText}</span>(${(score * 100).toFixed(0)}%)</div><button class="story-btn" data-index="${index}">${translations[currentLang].read_story}</button></div>`;
   return div;
 }
 async function playTrailer(id, type) {
@@ -114,7 +150,7 @@ async function playTrailer(id, type) {
     if (trailer) {
       $trailerFrame.src = `https://www.youtube.com/embed/${trailer.key}?autoplay=1`;
       $trailerModal.style.display = 'block';
-    } else { alert('Sorry, no official trailer found.'); }
+    } else { alert(translations[currentLang].trailer_unavailable); }
   } catch (err) { alert('Could not fetch trailer data.'); }
 }
 function showStory(index) {
@@ -122,7 +158,7 @@ function showStory(index) {
   if (result) {
     const item = result.item || result;
     $storyTitle.textContent = item.title || item.name;
-    $storyOverview.textContent = item.overview || "No story summary available.";
+    $storyOverview.textContent = item.overview || translations[currentLang].story_unavailable;
     $storyModal.style.display = 'block';
   }
 }
@@ -141,9 +177,7 @@ $q.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter') {
       e.preventDefault();
       const items = Array.from($suggestions.querySelectorAll('.s-item'));
-      if (items.length) {
-        (items[activeIndex >= 0 ? activeIndex : 0]).click();
-      }
+      if (items.length) { (items[activeIndex >= 0 ? activeIndex : 0]).click(); }
     } else if (e.key === 'Escape') { hideSuggestions(); }
   }
 });
