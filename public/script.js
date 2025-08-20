@@ -18,8 +18,8 @@ const $storyTitle = document.getElementById('storyTitle');
 const $storyOverview = document.getElementById('storyOverview');
 const $storyCloseBtn = document.querySelector('.story-close');
 
-// Helper function for TMDB image URLs
-const IMG = (path, size = "w185") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
+// UPDATED: The default size is now w500 for higher quality
+const IMG = (path, size = "w500") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
 function showLoader(v) { $loader.style.display = v ? 'flex' : 'none'; }
 
 // The main function that gets similar items
@@ -31,7 +31,6 @@ async function startStorySimilar(chosen, type) {
   showLoader(true);
 
   try {
-    // THE CRITICAL FIX IS HERE: We now pass the 'type' to the backend API
     const response = await fetch(`/api/get-similar?id=${chosen.id}&type=${type}`);
     if (!response.ok) {
         throw new Error(`Server responded with status: ${response.status}`);
@@ -45,7 +44,7 @@ async function startStorySimilar(chosen, type) {
       const frag = document.createDocumentFragment();
       similarResults.forEach((result, index) => {
         const item = result.item || result;
-        const score = result.score !== undefined ? result.score : 0.1; // Assign a default score for fallbacks
+        const score = result.score !== undefined ? result.score : 0.1;
         frag.appendChild(card(item, score, index));
       });
       $similarGrid.appendChild(frag);
@@ -70,7 +69,8 @@ function renderSuggestions(list) {
     const type = m.media_type || (m.first_air_date ? 'tv' : 'movie');
     const div = document.createElement('div');
     div.className = 's-item';
-    div.innerHTML = `<div class="s-img-wrap"><img src="${IMG(m.poster_path)}" alt="poster" onerror="this.style.display='none'"/><div class="s-play-icon" data-id="${m.id}" data-type="${type}">&#9658;</div></div><div><div class="s-title">${m.title || m.name}</div><div class="s-sub">${type.toUpperCase()} · ${(m.release_date || m.first_air_date || '').slice(0, 4)}</div></div><button class="s-trailer-btn" data-id="${m.id}" data-type="${type}">Trailer</button>`;
+    // UPDATED: We request a smaller, faster 'w185' image for suggestions
+    div.innerHTML = `<div class="s-img-wrap"><img src="${IMG(m.poster_path, 'w185')}" alt="poster" onerror="this.style.display='none'"/><div class="s-play-icon" data-id="${m.id}" data-type="${type}">&#9658;</div></div><div><div class="s-title">${m.title || m.name}</div><div class="s-sub">${type.toUpperCase()} · ${(m.release_date || m.first_air_date || '').slice(0, 4)}</div></div><button class="s-trailer-btn" data-id="${m.id}" data-type="${type}">Trailer</button>`;
     div.addEventListener('click', () => selectSuggestion(m));
     $suggestions.appendChild(div);
   });
@@ -78,7 +78,7 @@ function renderSuggestions(list) {
   activeIndex = -1;
 }
 async function searchSuggest(q) {
-  const apiKey = "29cc08fe366bb9bba8afa93b7d58a129"; // This key is only for suggestions, which is a low-risk, read-only operation.
+  const apiKey = "29cc08fe366bb9bba8afa93b7d58a129";
   const url = `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${q}&include_adult=false`;
   const res = await fetch(url);
   const data = await res.json();
@@ -100,7 +100,8 @@ function card(m, score, index) {
   else if (score > 0.25) { badgeColor = '#238636'; badgeText = 'Good Match'; }
   else { badgeColor = '#8B949E'; badgeText = 'Fair Match'; }
   div.className = 'card';
-  div.innerHTML = `<div class="poster-wrap"><img class="poster" src="${IMG(m.poster_path)}" alt="Poster" loading="lazy" onerror="this.style.display='none'"><div class="trailer-btn" data-id="${m.id}" data-type="${type}" title="Watch Trailer">&#9658;</div></div><div class="meta"><div class="title">${m.title || m.name}</div><div class="sub">${type.toUpperCase()} · ${year} · ⭐ ${m.vote_average?.toFixed(1) || '—'}</div><div class="sub"><span class="match-badge" style="background-color:${badgeColor}">${badgeText}</span>(${(score * 100).toFixed(0)}%)</div><button class="story-btn" data-index="${index}">Read Story</button></div>`;
+  // UPDATED: We request a high-quality 'w500' image for the results grid
+  div.innerHTML = `<div class="poster-wrap"><img class="poster" src="${IMG(m.poster_path, 'w500')}" alt="Poster" loading="lazy" onerror="this.style.display='none'"><div class="trailer-btn" data-id="${m.id}" data-type="${type}" title="Watch Trailer">&#9658;</div></div><div class="meta"><div class="title">${m.title || m.name}</div><div class="sub">${type.toUpperCase()} · ${year} · ⭐ ${m.vote_average?.toFixed(1) || '—'}</div><div class="sub"><span class="match-badge" style="background-color:${badgeColor}">${badgeText}</span>(${(score * 100).toFixed(0)}%)</div><button class="story-btn" data-index="${index}">Read Story</button></div>`;
   return div;
 }
 async function playTrailer(id, type) {
@@ -165,7 +166,7 @@ function afterSelectionUI(titleText) {
 }
 function selectSuggestion(m) {
   const type = m.media_type || (m.first_air_date ? 'tv' : 'movie');
-  startStorySimilar(m, type); // Pass the type here
+  startStorySimilar(m, type);
   afterSelectionUI(m.title || m.name);
 }
 $similarGrid.addEventListener('click', (e) => {
